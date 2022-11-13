@@ -7,7 +7,7 @@ of the following year. Additionaly, the program generates three files which corr
 generated files are "order_details_informe.csv", "pizzas_informe.csv" and "pizza_types_informe.csv"
 
 To build such prediction, the program processes the "order_details.csv" file, applying some indispensable changes to the pizza names and the quantity, so
-that every one of them has the same structure to simplify the next operations and treatment of the dataframes Then, the program sums up all the pizzas
+that every one of them has the same structure to simplify the next operations and treatment of the dataframes. Then, the program sums up all the pizzas
 that were ordered last year, differentiating pizza type and size. Then, divides that total quantity by 52 (number of weeks in a year) and takes the roof
 of the result of the division (for example, 300/52 = 5,769 => 6). Once this procediture has been done for every kind of pizza, we have the number of pizzas
 of each type ordered in an average week. Now, the program multiplies each pizza´s ingredientes by the number of pizzas of such type ordered in one week by
