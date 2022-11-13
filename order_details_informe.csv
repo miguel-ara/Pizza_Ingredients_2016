@@ -1,0 +1,5 @@
+,Nº de NaNs,Nº de Nulls,Dtype
+order_details_id,0,0,int64
+order_id,0,0,int64
+pizza_id,5673,5673,object
+quantity,4726,4726,object
