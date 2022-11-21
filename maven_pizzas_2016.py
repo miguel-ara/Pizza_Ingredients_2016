@@ -1,6 +1,7 @@
 import pandas as pd
 import signal
 import sys
+from datetime import datetime
 
 def handler_signal(signal, frame):
     print("\n\n Interrupción! Saliendo del programa de manera ordenada")
@@ -22,20 +23,23 @@ def extract():
     pedidos = pd.read_csv("order_details.csv", sep = ";", encoding = "UTF-8")
     pizzas = pd.read_csv("pizzas.csv", sep = ",", encoding = "UTF-8")
     ingredientes = pd.read_csv("pizza_types.csv", sep = ",", encoding = "LATIN-1")
-    return pedidos, pizzas, ingredientes
+    fechas = pd.read_csv("orders.csv", sep = ';', encoding = 'UTF-8')
+
+    return pedidos, pizzas, ingredientes, fechas
 
 
-def transform(pedidos, pizzas, ingredientes):
+def transform(pedidos, pizzas, ingredientes, fechas):
 
-    # Recibe los 3 dataframes, pedidos, pizzas e ingredientes y va trasnformando los datos para obtener
+    # Recibe los 4 dataframes, pedidos, fechas, pizzas e ingredientes y va transformando los datos para obtener
     # un diccionario con los ingredientes a comprar semanalmente. Primero, genera un informe para 
     # cada dataframe extraído (ver función informe_datos)
 
-    informe_datos(pedidos, pizzas, ingredientes)
+    informe_datos(pedidos, pizzas, ingredientes, fechas)
 
-    # El único de los csvs que contiene Nulls y en el que los datos están mal formateados es el de
-    # order_details.csv, el cual hemos cargado en el dataframe de pedidos. Por ello, primero deberemos
-    # limpiar este dataframe de Nulls, quitandolos de las columnas pizza_id y quantity.
+    # Los únicos csvs que contiene Nulls y en el que los datos están mal formateados son orders.csv y
+    # order_details.csv, los cuales han sido cargado en los dataframes de fechas y pedidos. Por ello, primero deberemos
+    # limpiar estos dataframe de Nulls, quitandolos de las columnas pizza_id y quantity en el caso de pedidos,
+    # y de las columnas date y time en el caso de fechas
 
     pedidos = pedidos[pedidos['pizza_id'].isnull() == False]
     pedidos = pedidos[pedidos['quantity'].isnull() == False]
@@ -59,12 +63,48 @@ def transform(pedidos, pizzas, ingredientes):
 
     pedidos['pizza_id'] = pizza_id  # Reescribimos las dos columnas del dataframe que acabamos de procesar
     pedidos['quantity'] = quantity
-    num_pizzas_sem = {}
-    dict_ingredientes = {}
+    pedidos.drop('order_details_id', axis = 1, inplace = True) # Quitamos las columnas que no vamos a usar
+    pedidos.sort_values(by = ['order_id'], inplace = True)     # Ordenamos el dataframe
+
+    # Ahora limpiamos el otro dataframe, el de fechas. Empezamos eliminando todos los Nulls.
+
+    fechas = fechas[fechas['date'].isnull() == False]
+    fechas = fechas[fechas['time'].isnull() == False]
+    date_sin_procesar = fechas['date'].to_list()
+    time_sin_procesar = fechas['time'].to_list()
+    date = []
+    time = []
+
+    for i in range(len(date_sin_procesar)):
+
+        fecha = pd.to_datetime(date_sin_procesar[i], errors='ignore')
+        hora = pd.to_datetime(time_sin_procesar[i], errors='ignore')
+
+        if type(fecha) == str:
+            fecha = datetime.fromtimestamp(int(float(fecha)))
+        fecha = fecha.date()
+
+        if type(hora) == str:
+            try:
+                hora = datetime.strptime(hora, '%H:%M PM')
+            except:
+                hora = datetime.strptime(hora, '%HH %MM %SS')
+        hora = hora.time()
+
+        date.append(fecha)
+        time.append(hora)
+
+    fechas['date'] = date  # Reescribimos las dos columnas con los datos que hemos filtrado y limpiado
+    fechas['time'] = time
+    fechas.sort_values(by=['order_id','date','time'], inplace = True)  # Ordenamos el dataframe
+
 
     # Para cada pizza obtenida del dataframe de pizzas sumamos el número de veces que se ha pedido en todo el
     # año, lo dividimos entre 52 (semanas de un año) tomando la parte entera y sumamos 1. De esta manera
     # estamos aproximando por arriba el número de pizzas de cada tipo que se piden en una semana.
+
+    num_pizzas_sem = {}
+    dict_ingredientes = {}
 
     for pizza in pizzas['pizza_id']:
         num_pizzas_sem[pizza] = int(pedidos[pedidos['pizza_id'] == pizza]['quantity'].sum() // 52 + 1) # Redondeamos para arriba
@@ -85,16 +125,19 @@ def transform(pedidos, pizzas, ingredientes):
         pizza, multiplicador = procesar_nombre_pizza(pizza_sin_procesar)
         calcular_ingredientes(pizza, pizza_sin_procesar, multiplicador, dict_ingredientes, num_pizzas_sem, ingredientes)
 
-    return dict_ingredientes
+    return dict_ingredientes, pedidos, fechas
 
 
-def load(dict_ingredientes):
+def load(dict_ingredientes, pedidos, fechas):
 
     # Recibe el diccionario con los ingredientes, crea un dataframe con dicho diccionario para
-    # así poder cargarlo en un fichero csv. Además, imprime dicho dataframe por pantalla.
+    # así poder cargarlo en un fichero csv. Además, imprime dicho dataframe por pantalla y carga
+    # una versión limpia de los dataframes que apartaba Pizzas Maven.
 
     compra_semanal_ingredientes = pd.DataFrame([[key, dict_ingredientes[key]] for key in dict_ingredientes.keys()], columns=['Ingredient', 'Amount (units)'])
     compra_semanal_ingredientes.to_csv('compra_semanal_ingredientes.csv', index=False)
+    pedidos.to_csv('order_details_limpiado.csv', index = False)
+    fechas.to_csv('orders_limpiado.csv', index = False)
     print(f'\nEn una semana, el manager de Pizzas Maven deberá comprar las siguientes cantidades de ingredientes: \n\n {compra_semanal_ingredientes}')
 
 
@@ -130,10 +173,10 @@ def calcular_ingredientes(pizza, pizza_sin_procesar, multiplicador, dict_ingredi
         dict_ingredientes[ingredient] += num_pizzas_sem[pizza_sin_procesar]*multiplicador
 
 
-def informe_datos(pedidos, pizzas, ingredientes):
+def informe_datos(pedidos, pizzas, ingredientes, fechas):
 
-    dataframes = [pedidos, pizzas, ingredientes]
-    archivos = ["order_details.csv", "pizzas.csv", "pizza_types.csv"]
+    dataframes = [pedidos, pizzas, ingredientes, fechas]
+    archivos = ["order_details.csv", "pizzas.csv", "pizza_types.csv", "orders.csv"]
 
     # df.info() aporta información extra que no nos interesa, mejor obtener a mano solo lo que nos interesa del dataframe.
     # Esto lo haremos para cada dataframe que hemos cargado, y guardaremos el resultado en un csv para cada dataframe
@@ -162,9 +205,9 @@ def ETL():
 
     # ETL incluyendo informe de cada dataframe extraído
 
-    pedidos, pizzas, ingredientes = extract()
-    compra = transform(pedidos, pizzas, ingredientes)
-    load(compra)
+    pedidos, pizzas, ingredientes, fechas = extract()
+    compra, pedidos, fechas = transform(pedidos, pizzas, ingredientes, fechas)
+    load(compra, pedidos, fechas)
 
 
 if __name__ == '__main__':

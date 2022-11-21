@@ -1,0 +1,4 @@
+,Nº de NaNs,Nº de Nulls,Dtype
+order_id,0,0,int64
+date,2353,2353,object
+time,2038,2038,object
